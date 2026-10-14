@@ -767,7 +767,7 @@ display:none;
 }
 
 /* Share Overlay Styles */
-.share-overlay, .book-lp-overlay {
+.share-overlay {
   position: fixed; inset: 0; z-index: 250;
   display: flex; align-items: center; justify-content: center; flex-direction: column;
   background: rgba(255,255,255,0.3);
@@ -775,7 +775,7 @@ display:none;
   backdrop-filter: blur(30px) saturate(1.5);
   opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
 }
-.share-overlay.on, .book-lp-overlay.on { opacity: 1; pointer-events: auto; }
+.share-overlay.on { opacity: 1; pointer-events: auto; }
 .share-backdrop { position: absolute; inset: 0; z-index: 0; }
 .share-close-btn {
   position: absolute; top: 24px; right: 24px;
@@ -1029,19 +1029,6 @@ display:none;
   </div>
 </div>
 
-<!-- Book Long Press Overlay -->
-<div id="bookLpOverlay" class="book-lp-overlay">
-  <div class="share-backdrop"></div>
-  <button class="share-close-btn">✕</button>
-  <div class="book-lp-content">
-    <div class="book-lp-card" id="bookLpCard"></div>
-    <div class="share-actions">
-      <button class="share-btn" id="bookLpCloseBtn">Close</button>
-      <button class="share-btn primary" id="bookLpShortcutBtn">Add as Shortcut</button>
-    </div>
-  </div>
-</div>
-
 <script>
 /* Global error hook */
 addEventListener('error', function(e){
@@ -1279,7 +1266,6 @@ else fallbackBack();
 }
 function tryCloseLayer(id){
 switch(id){
-case 'bookLpOverlay': if(document.getElementById('bookLpOverlay').classList.contains('on')){ closeBookLpOverlay(); return true; } return false;
 case 'shareOverlay': if(document.getElementById('shareOverlay').classList.contains('on')){ closeShareOverlay(); return true; } return false;
 case 'confirm': if(confirmModal.classList.contains('on')){ dismissConfirm(); return true; } return false;
 case 'saveModal': if(saveModal.classList.contains('on')){ closeSaveModal(); return true; } return false;
@@ -1293,7 +1279,7 @@ return false;
 }
 function fallbackBack(){
 if(closeAllMenusIfOpen()) return;
-const order=['bookLpOverlay','shareOverlay','confirm','saveModal','chapModal','install','savedCategory','reader','savedMode'];
+const order=['shareOverlay','confirm','saveModal','chapModal','install','savedCategory','reader','savedMode'];
 for(const id of order){ if(tryCloseLayer(id)) return; }
 }
 function onPopState(){
@@ -1675,44 +1661,6 @@ function closeShareOverlay() {
   navInternalRemove('shareOverlay');
 }
 
-let currentLpBookIdx = -1;
-
-function openBookLpOverlay(bookIdx) {
-  const d = BOOKS_DATA[bookIdx];
-  if (!d || d._isCategory) return;
-  currentLpBookIdx = bookIdx;
-  const overlay = document.getElementById('bookLpOverlay');
-  const card = document.getElementById('bookLpCard');
-  card.style.background = d.art;
-  card.style.color = d.ink;
-  card.textContent = d.t;
-  overlay.classList.add('on');
-  navPush('bookLpOverlay');
-}
-
-function closeBookLpOverlay() {
-  const overlay = document.getElementById('bookLpOverlay');
-  overlay.classList.remove('on');
-  navInternalRemove('bookLpOverlay');
-  currentLpBookIdx = -1;
-}
-
-function addBookShortcut() {
-  if (currentLpBookIdx < 0) return;
-  const d = BOOKS_DATA[currentLpBookIdx];
-  const bookName = encodeURIComponent(d.t);
-  history.replaceState(null, '', `#book=${bookName}`);
-  
-  if (deferredPrompt) {
-    deferredPrompt.prompt();
-    deferredPrompt.userChoice.then(() => { deferredPrompt = null; });
-    showToast('Add to Home Screen to open this book directly');
-  } else {
-    showToast('Use your browser menu to "Add to Home Screen"');
-  }
-  closeBookLpOverlay();
-}
-
 function triggerVerseShare(block) {
   if (navigator.vibrate) navigator.vibrate(50);
   let bookName = '', chapterName = '', versesText = [];
@@ -1721,8 +1669,8 @@ function triggerVerseShare(block) {
     const selectedBlocks = rVerses.querySelectorAll('.verse-block.selected-verse');
     const blocksToShare = selectedBlocks.length > 0 ? selectedBlocks : [block];
     
-    if (blocksToShare.length > 3) {
-      showToast('Please select up to 3 verses to share');
+    if (blocksToShare.length > 5) {
+      showToast('Please select up to 5 verses to share');
       return;
     }
     
@@ -1783,10 +1731,6 @@ document.getElementById('shareNativeBtn').addEventListener('click', async () => 
   }
 });
 
-document.querySelector('#bookLpOverlay .share-backdrop').addEventListener('click', closeBookLpOverlay);
-document.querySelector('#bookLpOverlay .share-close-btn').addEventListener('click', closeBookLpOverlay);
-document.getElementById('bookLpCloseBtn').addEventListener('click', closeBookLpOverlay);
-document.getElementById('bookLpShortcutBtn').addEventListener('click', addBookShortcut);
 /* ── End Share Image Generation ── */
 
 function makeBook(d,i){
@@ -1802,21 +1746,6 @@ const b={el,i,pos:i,lp:i,vis:1,tilt:0,cur:0,hover:0,hoverT:0,act:0,press:0,press
 resetCardCache(b);
 el.addEventListener('pointerenter',()=>{ if(b.pos>=0&&!isTouchDevice) b.hoverT=1; });
 el.addEventListener('pointerleave',()=>{ b.hoverT=0; clearTimeout(el._lpTimer); });
-
-// Long press for book shortcut
-el.addEventListener('pointerdown', (e) => {
-  if (e.pointerType === 'mouse' && e.button !== 0) return;
-  b.pressT = 1;
-  clearTimeout(el._lpTimer);
-  el._lpTimer = setTimeout(() => {
-    if (!moved) {
-      el._isLongPress = true;
-      openBookLpOverlay(b.i);
-    }
-  }, 600);
-});
-el.addEventListener('pointerup', () => { b.pressT = 0; clearTimeout(el._lpTimer); });
-el.addEventListener('pointercancel', () => { clearTimeout(el._lpTimer); });
 
 const favStar = el.querySelector('.book-fav-star');
 if (favStar) {
@@ -2160,14 +2089,14 @@ infoLeft = Math.min(vw-360, baseCX + BW*SS*.62 + 20); info.style.left=infoLeft+'
 B.forEach(resetCardCache); if(ghostEl) delete ghostEl.dataset.h;
 }
 addEventListener('resize',resize);
-addEventListener('wheel',e=>{ if(stageAnimating) return; if(e.target.closest('#reader,#sres,#top,#settingsMenu,#mmenu,#cmpMenu,#chapModal,.save-modal,.confirm-modal,#shareOverlay,#bookLpOverlay')) return; e.preventDefault(); const d=e.deltaMode===1?e.deltaY*16:e.deltaY; scrollT=clampScroll(scrollT+d); vel+=d*.02; if(vel>VMAX)vel=VMAX; if(vel<-VMAX)vel=-VMAX; lastInput=performance.now(); hint.classList.add('gone'); },{passive:false});
+addEventListener('wheel',e=>{ if(stageAnimating) return; if(e.target.closest('#reader,#sres,#top,#settingsMenu,#mmenu,#cmpMenu,#chapModal,.save-modal,.confirm-modal,#shareOverlay')) return; e.preventDefault(); const d=e.deltaMode===1?e.deltaY*16:e.deltaY; scrollT=clampScroll(scrollT+d); vel+=d*.02; if(vel>VMAX)vel=VMAX; if(vel<-VMAX)vel=-VMAX; lastInput=performance.now(); hint.classList.add('gone'); },{passive:false});
 function forceEndDrag(){ dragging=false; activePointer=-1; document.body.classList.remove('dragging'); B.forEach(b=>{ b.pressT=0; }); vel=0; }
 addEventListener('blur', forceEndDrag); document.addEventListener('visibilitychange', ()=>{ if(document.hidden) forceEndDrag(); });
 addEventListener('pointerdown',e=>{
 if(stageAnimating) return;
 if(activePointer!==-1){ if(performance.now() - lastPointerActivity > 800){ forceEndDrag(); } else return; }
 moved=false;
-if(e.target.closest('#reader,#sres,#top,#settingsMenu,#mmenu,#cmpMenu,#dots,#chapModal,.save-modal,.confirm-modal,#shareOverlay,#bookLpOverlay')) return;
+if(e.target.closest('#reader,#sres,#top,#settingsMenu,#mmenu,#cmpMenu,#dots,#chapModal,.save-modal,.confirm-modal,#shareOverlay')) return;
 if(focused!==-1) return;
 activePointer=e.pointerId; dragging=true; vel=0; lastY=e.clientY; lastT=performance.now(); lastPointerActivity=lastT; startX=e.clientX; startY=e.clientY; dragStartT=lastT; dragStartScroll=scrollT;
 B.forEach(b=>b.hoverT=0); document.body.classList.add('dragging');
