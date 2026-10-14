@@ -765,6 +765,78 @@ background:rgba(252,252,254,.86);
 box-shadow:0 30px 70px -30px rgba(15,15,25,.5),inset 0 1px 0 rgba(255,255,255,.9),inset 0 0 0 1px rgba(255,255,255,.5);
 display:none;
 }
+
+/* Share Overlay Styles */
+.share-overlay, .book-lp-overlay {
+  position: fixed; inset: 0; z-index: 250;
+  display: flex; align-items: center; justify-content: center; flex-direction: column;
+  background: rgba(255,255,255,0.3);
+  -webkit-backdrop-filter: blur(30px) saturate(1.5);
+  backdrop-filter: blur(30px) saturate(1.5);
+  opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
+}
+.share-overlay.on, .book-lp-overlay.on { opacity: 1; pointer-events: auto; }
+.share-backdrop { position: absolute; inset: 0; z-index: 0; }
+.share-close-btn {
+  position: absolute; top: 24px; right: 24px;
+  width: 44px; height: 44px; border-radius: 50%;
+  background: rgba(0,0,0,0.08); border: 0; cursor: pointer;
+  font-size: 22px; font-weight: 700; color: var(--ink);
+  display: grid; place-items: center; z-index: 10;
+  transition: background 0.2s, transform 0.2s;
+}
+.share-close-btn:hover { background: rgba(0,0,0,0.15); transform: scale(1.05); }
+.share-close-btn:active { transform: scale(0.95); }
+
+.share-preview {
+  z-index: 1;
+  transform: scale(0.9);
+  animation: sharePop 0.4s cubic-bezier(.34,1.56,.64,1) forwards;
+}
+.share-preview img {
+  max-height: 65vh; max-width: 90vw; border-radius: 24px;
+  box-shadow: 0 30px 60px -20px rgba(0,0,0,0.25);
+  background: #fff;
+}
+@keyframes sharePop {
+  0% { transform: scale(0.8); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.share-actions {
+  z-index: 1;
+  margin-top: 32px; display: flex; gap: 12px;
+  animation: sharePop 0.4s cubic-bezier(.34,1.56,.64,1) forwards;
+  animation-delay: 0.1s; opacity: 0;
+}
+.share-btn {
+  padding: 14px 28px; border-radius: 999px; border: 0; cursor: pointer;
+  font: inherit; font-size: 15px; font-weight: 600;
+  background: rgba(255,255,255,0.8); color: var(--ink);
+  box-shadow: 0 8px 20px -8px rgba(0,0,0,0.15);
+  transition: transform 0.2s, background 0.2s;
+}
+.share-btn:hover { transform: scale(1.05); background: #fff; }
+.share-btn.primary { background: var(--ink); color: #fff; }
+.share-btn.primary:hover { background: #333; }
+
+/* Book Long Press Overlay */
+.book-lp-content {
+  z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 32px;
+  animation: sharePop 0.4s cubic-bezier(.34,1.56,.64,1) forwards;
+}
+.book-lp-card {
+  width: 320px; height: 210px; border-radius: 24px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 36px; font-weight: 800; color: #fff;
+  box-shadow: 0 30px 60px -20px rgba(0,0,0,0.3);
+  animation: floatCard 4s ease-in-out infinite;
+  text-align: center; padding: 24px;
+  line-height: 1.1; word-break: break-word;
+}
+@keyframes floatCard {
+  0%, 100% { transform: translateY(0) rotate(-1deg); }
+  50% { transform: translateY(-15px) rotate(1deg); }
+}
 </style>
 </head>
 <body>
@@ -943,6 +1015,33 @@ display:none;
 <nav id="dots"></nav>
 <div id="rail"><div class="thumb"></div></div>
 <div id="hint"><svg viewBox="0 0 10 10"><path d="M1 3l4 4 4-4"/></svg><span data-i18n="hint_text">Swipe ⇅ browse · ⇄ saved · ⏎ open · esc back</span></div>
+
+<!-- Share Overlay -->
+<div id="shareOverlay" class="share-overlay">
+  <div class="share-backdrop"></div>
+  <button class="share-close-btn">✕</button>
+  <div class="share-preview">
+    <img id="shareImg" alt="Share Preview" />
+  </div>
+  <div class="share-actions">
+    <button class="share-btn" id="shareSaveBtn">Save Image</button>
+    <button class="share-btn primary" id="shareNativeBtn">Share</button>
+  </div>
+</div>
+
+<!-- Book Long Press Overlay -->
+<div id="bookLpOverlay" class="book-lp-overlay">
+  <div class="share-backdrop"></div>
+  <button class="share-close-btn">✕</button>
+  <div class="book-lp-content">
+    <div class="book-lp-card" id="bookLpCard"></div>
+    <div class="share-actions">
+      <button class="share-btn" id="bookLpCloseBtn">Close</button>
+      <button class="share-btn primary" id="bookLpShortcutBtn">Add as Shortcut</button>
+    </div>
+  </div>
+</div>
+
 <script>
 /* Global error hook */
 addEventListener('error', function(e){
@@ -1039,7 +1138,7 @@ const VERSIONS = [
 const ICON_CLOSE = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>';
 const ICON_BACK = '<svg width="11" height="15" viewBox="0 0 9 15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 1.5 1.5 7.5l6 6"/></svg>';
 const UI_STRINGS = {
-search_placeholder: "Search books, chapters, verses…", loading_scripture: "Loading Scripture...", fetching_data: "Fetching data from server. This may take a moment.", all_books: "All books", old_testament: "Old Testament", new_testament: "New Testament", favorites: "Favorites", infinite_loop: "Infinite Loop", sort_az: "Sort A-Z", download_pwa: "Download as web app", compare: "Compare", previous: "Previous", next: "Next", chapters: "Chapter", save_scripture: "Save Scripture", saving_from: "Saving from:", description_notes: "Description / Notes", write_notes: "Write your notes about these verses...", selected_verses: "Selected Verses", add_verse: "+ Add verse from another book", category: "Category", cancel: "Cancel", save: "Save", translation: "Translation", confirm_selection: "Confirm Selection", confirm: "Confirm", delete: "Delete", install_lume: "Install LUME", close: "Close", hint_text: "Swipe ⇅ browse · ⇄ saved · ⏎ open · esc back", toast_added_fav: "Added to favorites", toast_removed_fav: "Removed from favorites", toast_saved: "Scripture saved", toast_deleted: "Saved item deleted", toast_updated: "Saved item updated", toast_add_verse: "Add at least one verse", toast_install_already: "LUME is already running as an app", toast_install_dismissed: "Install dismissed", toast_install_installing: "Installing LUME…", toast_load_fail: "Failed to load comparison version", toast_back_exit: "Press back again to exit", no_verses_selected: "No verses selected", choose_book: "Choose a book", loading_books: "Loading books...", confirm_delete_title: "Delete this saved item?", confirm_delete_msg: "This will remove it from your library permanently.", search_versions: "Search languages or versions...", search_compare: "Search versions to compare...", nothing_found: "Nothing found."
+search_placeholder: "Search books, chapters, verses…", loading_scripture: "Loading Scripture...", fetching_data: "Fetching data from server. This may take a moment.", all_books: "All books", old_testament: "Old Testament", new_testament: "New Testament", favorites: "Favorites", infinite_loop: "Infinite Loop", sort_az: "Sort A-Z", download_pwa: "Download as web app", compare: "Compare", previous: "Previous", next: "Next", chapters: "Chapter", save_scripture: "Save Scripture", saving_from: "Saving from:", description_notes: "Description / Notes", write_notes: "Write your notes about these verses...", selected_verses: "Item", add_verse: "+ Add verse from another book", category: "Category", cancel: "Cancel", save: "Save", translation: "Translation", confirm_selection: "Confirm Selection", confirm: "Confirm", delete: "Delete", install_lume: "Install LUME", close: "Close", hint_text: "Swipe ⇅ browse · ⇄ saved · ⏎ open · esc back", toast_added_fav: "Added to favorites", toast_removed_fav: "Removed from favorites", toast_saved: "Scripture saved", toast_deleted: "Saved item deleted", toast_updated: "Saved item updated", toast_add_verse: "Add at least one verse", toast_install_already: "LUME is already running as an app", toast_install_dismissed: "Install dismissed", toast_install_installing: "Installing LUME…", toast_load_fail: "Failed to load comparison version", toast_back_exit: "Press back again to exit", no_verses_selected: "No verses selected", choose_book: "Choose a book", loading_books: "Loading books...", confirm_delete_title: "Delete this saved item?", confirm_delete_msg: "This will remove it from your library permanently.", search_versions: "Search languages or versions...", search_compare: "Search versions to compare...", nothing_found: "Nothing found."
 };
 function getUIText(key) { return UI_STRINGS[key] || key; }
 const BOOK_TITLES = {
@@ -1063,7 +1162,7 @@ const BOOK_TITLES = {
 "Turkish": ["Yaratılış","Mısır'dan Çıkış","Levililer","Çölde Sayım","Yasa'nın Tekrarı","Yeşu","Hakimler","Rut","1. Samuel","2. Samuel","1. Krallar","2. Krallar","1. Tarihler","2. Tarihler","Ezra","Nehemya","Ester","Eyüp","Mezmurlar","Süleyman'ın Özdeyişleri","Vaiz","Ezgiler Ezgisi","Yeşaya","Yeremya","Ağıtlar","Hezekiel","Daniel","Hoşea","Yoel","Amos","Ovadya","Yunus","Mika","Nahum","Habakkuk","Sefanya","Hagay","Zekeriya","Malaki","Matta","Markos","Luka","Yuhanna","Elçilerin İşleri","Romalılar","1. Korintliler","2. Korintliler","Galatyalılar","Efesliler","Filipililer","Koloseliler","1. Selanikliler","2. Selanikliler","1. Timoteos","2. Timoteos","Titus","Filimon","İbraniler","Yakup","1. Petrus","2. Petrus","1. Yuhanna","2. Yuhanna","3. Yuhanna","Yahuda","Vahiy"],
 "Swahili": ["Mwanzo","Kutoka","Walawi","Hesabu","Kumbukumbu la Torati","Yoshua","Waamuzi","Ruthu","1 Samweli","2 Samweli","1 Wafalme","2 Wafalme","1 Mambo ya Nyakati","2 Mambo ya Nyakati","Ezra","Nehemia","Esta","Ayubu","Zaburi","Mithali","Mhubiri","Wimbo Ulio Bora","Isaya","Yeremia","Maombolezo","Ezekieli","Danieli","Hosea","Yoeli","Amosi","Obadia","Yona","Mika","Nahumu","Habakuki","Sefania","Hagai","Zekaria","Malaki","Mathayo","Marko","Luka","Yohana","Matendo","Waroma","1 Wakorintho","2 Wakorintho","Wagalatia","Waefeso","Wafilipi","Wakolosai","1 Wathesalonike","2 Wathesalonike","1 Timotheo","2 Timotheo","Tito","Filemoni","Waebrania","Yakobo","1 Petro","2 Petro","1 Yohana","2 Yohana","3 Yohana","Yuda","Ufunuo"],
 "Afrikaans": ["Genesis","Eksodus","Levitikus","Numeri","Deuteronomium","Josua","Rigters","Rut","1 Samuel","2 Samuel","1 Konings","2 Konings","1 Kronieke","2 Kronieke","Esra","Nehemia","Ester","Job","Psalms","Spreuke","Prediker","Hooglied","Jesaja","Jeremia","Klaagliedere","Esegiel","Daniël","Hosea","Joël","Amos","Obadja","Jona","Miga","Nahum","Habakuk","Sefanja","Haggai","Sagaria","Maleagi","Matteus","Markus","Lukas","Johannes","Handelinge","Romeine","1 Korintiërs","2 Korintiërs","Galasiërs","Effesiërs","Filippense","Kolossense","1 Tessalonisense","2 Tessalonisense","1 Timoteus","2 Timoteus","Titus","Filemon","Hebreërs","Jakobus","1 Petrus","2 Petrus","1 Johannes","2 Johannes","3 Johannes","Judas","Openbaring"],
-"Malayalam": ["ഉൽപത്തി","പുറപ്പാട്","ലേവ്യർ","സംഖ്യകൾ","ആവർത്തനം","യോശുവ","ന്യായാധിപതിമാർ","രൂത്ത്","1 ശമൂവേൽ","2 ശമൂവേൽ","1 രാജാക്കന്മാർ","2 രാജാക്കന്മാർ","1 ദിനവൃത്താന്തം","2 ദിനവൃത്താന്തം","എസ്രാ","നെഹെമ്യാവ്","എസ്തേർ","ഇയ്യോബ്","സങ്കീർത്തനങ്ങൾ","സദൃശ്യവാക്യങ്ങൾ","സഭാപ്രസംഗി","ഉത്തമഗീതം","യെശയ്യാവ്","യിരെമ്യാവ്","വിലാപങ്ങൾ","യെഹെസ്കേൽ","ദാനിയേൽ","ഹോശേയ","യോവേൽ","ആമോസ്","ഒബദ്യാവ്","യോനാ","മീഖാ","നഹൂം","ഹബക്കൂക്ക്","ചെഫന്യാവ്","ഹഗ്ഗായി","സഖര്യാവ്","മലാഖി","മത്തായി","മർക്കോസ്","ലൂക്കോസ്","യോഹന്നാൻ","അപ്പൊസ്തലനടപടികൾ","റോമർ","1 കൊരിന്ത്യർ","2 കൊരിന്ത്യർ","ഗലാത്യർ","എഫെസ്യർ","ഫിലിപ്പ്യർ","കൊലൊസ്സ്യർ","1 തെസ്സലൊനിക്കയർ","2 തെസ്സലൊനിക്കയർ","1 തിമൊഥെയൊസ്","2 തിമൊഥെയൊസ്","തീത്തൊസ്","ഫിലേമൊൻ","എബ്രായർ","യാക്കോബ്","1 പത്രൊസ്","2 പത്രൊസ്","1 യോഹന്നാൻ","2 യോഹന്നാൻ","3 യോഹന്നാൻ","യൂദാ","വെളിപ്പാട്"],
+"Malayalam": ["ഉൽപത്തി","പുറപ്പാട്","ലേവ്യർ","സംഖ്യകൾ","ആവർത്തനം","യോശുവ","ന്യായാധിപതിമാർ","രൂത്ത്","1 ശമൂവേൽ","2 ശമൂവേൽ","1 രാജാക്കന്മാർ","2 രാജാക്കന്മാർ","1 ദിനവൃത്താന്തം","2 ദിനവൃത്താന്തം","എസ്രാ","നെഹെമ്യാവ്","എസ്തേർ","ഇയ്യോബ്","സങ്കീർത്തനങ്ങൾ","സദൃശ്യവാക്യങ്ങൾ","സഭാപ്രസംഗി","ഉത്തമഗീതം","യെശയ്യാവ്","യിരെമ്യാവ്","വിലാപങ്ങൾ","യെഹെസ്കേൽ","ദാനിയേൽ","ഹോശേയ","യോവേൽ","ആമോസ്","ഒബദ്യാവ്","യോനാ","മീഖാ","നഹൂം","ഹബക്കൂക്ക്","ചെഫന്യാവ്","ഹഗ്ഗായി","സഖര്യാവ്","മലാഖി","മത്തായി","മർക്കോസ്","ലൂക്കോസ്","യോഹന്നാൻ","അപ്പൊസ്തലനടപടികൾ","റോമർ","1 കൊരിന്ത്യർ","2 കൊരിന്ത്യർ","ഗലാത്യർ","എഫെസ്യർ","ഫിലിപ്പ്യർ","കൊലോസെയർ","1 തെസ്സലൊനിക്കയർ","2 തെസ്സലൊനിക്കയർ","1 തിമൊഥെയൊസ്","2 തിമൊഥെയൊസ്","തീത്തൊസ്","ഫിലേമൊൻ","എബ്രായർ","യാക്കോബ്","1 പത്രൊസ്","2 പത്രൊസ്","1 യോഹന്നാൻ","2 യോഹന്നാൻ","3 യോഹന്നാൻ","യൂദാ","വെളിപ്പാട്"],
 "Tamil": ["ஆதியாகமம்","யாத்திராகமம்","லேவியராகமம்","எண்ணாகமம்","உபாகமம்","யோசுவா","நியாயாதிபதிகள்","ரூத்","1 சாமுவேல்","2 சாமுவேல்","1 இராஜாக்கள்","2 இராஜாக்கள்","1 நாளாகமம்","2 நாளாகமம்","எஸ்றா","நெகேமியா","எஸ்தர்","யோபு","சங்கீதங்கள்","நீதிமொழிகள்","பிரசங்கி","உன்னதப்பாட்டு","ஏசாயா","எரேமியா","புலம்பல்","எசேக்கியேல்","தானியேல்","ஓசியா","யோவேல்","ஆமோஸ்","ஒபதியா","யோனா","மீகா","நாகூம்","ஆபகூக்","செப்பனியா","ஆகாய்","சகரியா","மல்கியா","மத்தேயு","மாற்கு","லூக்கா","யோவான்","அப்போஸ்தலர்","ரோமர்","1 கொரிந்தியர்","2 கொரிந்தியர்","கலாத்தியர்","எபேசியர்","பிலிப்பியர்","கொலோசெயர்","1 தெசலோனிக்கேயர்","2 தெசலோனிக்கேயர்","1 தீமோத்தேயு","2 தீமோத்தேயு","தீத்து","பிலேமோன்","எபிரெயர்","யாக்கோபு","1 பேதுரு","2 பேதுரு","1 யோவான்","2 யோவான்","3 யோவான்","யூதா","வெளிப்படுத்தின விசேஷம்"],
 "Telugu": ["ఆదికాండము","నిర్గమకాండము","లేవీయకాండము","సంఖ్యాకాండము","ద్వితీయోపదేశకాండము","యెహోషువ","న్యాయాధిపతులు","రూతు","1 సమూయేలు","2 సమూయేలు","1 రాజులు","2 రాజులు","1 దినవృత్తాంతములు","2 దినవృత్తాంతములు","ఎజ్రా","నెహెమ్యా","ఎస్తేరు","ఇయ్యోబు","కీర్తనలు","సామెతలు","ప్రసంగి","పరమగీతము","యెషయా","యిర్మీయా","ప్రలాపములు","యెహెజ్కేలు","దానియేలు","హోషేయ","యోవేలు","ఆమోసు","ఓబద్యా","యోనా","మీకా","నహూము","హబక్కూకు","జెఫన్యా","హగ్గయి","జెకర్యా","మలాకీ","మత్తయి","మార్కు","లూకా","యోహాను","అపొస్తలుల కార్యములు","రోమీయులకు","1 కొరింథీయులకు","2 కొరింథీయులకు","గలతీయులకు","ఎఫెసీయులకు","ఫిలిప్పీయులకు","కొలస్సీయులకు","1 థెస్సలోనీకయులకు","2 థెస్సలోనీకయులకు","1 తిమోతికి","2 తిమోతికి","తీతుకు","ఫిలేమోనుకు","హెబ్రీయులకు","యాకోబు","1 పేతురు","2 పేతురు","1 యోహాను","2 యోహాను","3 యోహాను","యూదా","ప్రకటన"],
 "Ukrainian": ["Буття","Вихід","Левіт","Числа","Повторення Закону","Ісус Навин","Суддів","Рут","1 Самуїлова","2 Самуїлова","1 Царів","2 Царів","1 Хроніки","2 Хроніки","Ездра","Неємія","Естер","Йов","Псалми","Приповісті","Еклезіяст","Пісня Пісень","Ісая","Єремія","Плач Єремії","Єзекіїль","Даниїл","Осія","Йоїл","Амос","Овдій","Йона","Михей","Наум","Авакум","Софонія","Огій","Захарія","Малахія","Матвій","Марко","Лука","Іван","Дії","Римлян","1 Коринтян","2 Коринтян","Галатів","Ефесян","Филип'ян","Колосян","1 Солунян","2 Солунян","1 Тимофію","2 Тимофію","Титу","Филимона","Євреїв","Яків","1 Петра","2 Петра","1 Івана","2 Івана","3 Івана","Юда","Об'явлення"],
@@ -1156,7 +1255,7 @@ function showToast(msg) {
 toast.textContent = msg;
 toast.classList.add('on');
 clearTimeout(toastTimer);
-toastTimer = setTimeout(() => toast.classList.remove('on'), 1000);
+toastTimer = setTimeout(() => toast.classList.remove('on'), 2000);
 }
 const navStack = [];
 let historyUsable = true;
@@ -1180,6 +1279,8 @@ else fallbackBack();
 }
 function tryCloseLayer(id){
 switch(id){
+case 'bookLpOverlay': if(document.getElementById('bookLpOverlay').classList.contains('on')){ closeBookLpOverlay(); return true; } return false;
+case 'shareOverlay': if(document.getElementById('shareOverlay').classList.contains('on')){ closeShareOverlay(); return true; } return false;
 case 'confirm': if(confirmModal.classList.contains('on')){ dismissConfirm(); return true; } return false;
 case 'saveModal': if(saveModal.classList.contains('on')){ closeSaveModal(); return true; } return false;
 case 'chapModal': if(chapModal.classList.contains('on')){ closeChapModal(); return true; } return false;
@@ -1192,7 +1293,7 @@ return false;
 }
 function fallbackBack(){
 if(closeAllMenusIfOpen()) return;
-const order=['confirm','saveModal','chapModal','install','savedCategory','reader','savedMode'];
+const order=['bookLpOverlay','shareOverlay','confirm','saveModal','chapModal','install','savedCategory','reader','savedMode'];
 for(const id of order){ if(tryCloseLayer(id)) return; }
 }
 function onPopState(){
@@ -1423,6 +1524,271 @@ d.desc = first.slice(0,110);
 });
 }
 function resetCardCache(b){ b.k1=b.k2=b.k3=b.k4=b.k5=b.k6=b.k7=b.k8=NaN; }
+
+/* ── Share Image Generation ── */
+const SHARE_W = 1080;
+const SHARE_H = 1920;
+
+function drawRoundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function drawLumeLogo(ctx, x, y, r) {
+  if (ctx.createConicGradient) {
+    const grad = ctx.createConicGradient(Math.PI * 1.16, x, y);
+    grad.addColorStop(0, '#7db4d8');
+    grad.addColorStop(0.25, '#e0608f');
+    grad.addColorStop(0.5, '#c9a15a');
+    grad.addColorStop(0.75, '#8fb07a');
+    grad.addColorStop(1, '#7db4d8');
+    ctx.fillStyle = grad;
+  } else {
+    ctx.fillStyle = '#c9a15a';
+  }
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+  ctx.lineWidth = 4;
+  ctx.stroke();
+}
+
+function drawFooter(ctx) {
+  const y = 1720;
+  ctx.fillStyle = '#1d1d1f';
+  ctx.font = '600 36px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('LUME', SHARE_W / 2, y);
+  
+  // Icon on new line, centered
+  drawLumeLogo(ctx, SHARE_W / 2, y + 80, 28);
+}
+
+function generateVerseShareImage(bookName, chapterName, versesText) {
+  const canvas = document.createElement('canvas');
+  canvas.width = SHARE_W;
+  canvas.height = SHARE_H;
+  const ctx = canvas.getContext('2d');
+
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, SHARE_W, SHARE_H);
+
+  // Top: Book Name and Chapter
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#1d1d1f';
+  
+  ctx.font = '700 52px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillText(bookName, SHARE_W / 2, 240);
+  
+  ctx.font = '500 38px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillStyle = 'rgba(29,29,31,0.6)';
+  ctx.fillText(chapterName, SHARE_W / 2, 310);
+
+  // Middle: Verses
+  ctx.fillStyle = '#1d1d1f';
+  ctx.font = '400 42px ui-serif, Georgia, serif';
+  ctx.textAlign = 'center';
+  
+  const lineHeight = 76;
+  const maxWidth = 840;
+  const gapBetweenVerses = 40;
+
+  // --- FIRST PASS: Calculate total height of all verses ---
+  let totalHeight = 0;
+  versesText.forEach((verseStr, idx) => {
+    const words = verseStr.split(' ');
+    let line = '';
+    let linesCount = 0;
+    for (let n = 0; n < words.length; n++) {
+      const testLine = line + words[n] + ' ';
+      if (ctx.measureText(testLine).width > maxWidth && n > 0) {
+        linesCount++;
+        line = words[n] + ' ';
+      } else {
+        line = testLine;
+      }
+    }
+    linesCount++; // Count the final line of the verse
+    totalHeight += linesCount * lineHeight;
+    
+    // Add gap between verses (but not after the last one)
+    if (idx < versesText.length - 1) {
+      totalHeight += gapBetweenVerses; 
+    }
+  });
+
+  // --- Calculate starting Y to center the block ---
+  const headerEndY = 360;   // Safe zone below the chapter title
+  const footerStartY = 1680; // Safe zone above the footer
+  const availableHeight = footerStartY - headerEndY;
+  let startY = headerEndY + (availableHeight - totalHeight) / 2;
+
+  // --- SECOND PASS: Draw the verses ---
+  let currentY = startY;
+  
+  versesText.forEach((verseStr, idx) => {
+    const words = verseStr.split(' ');
+    let line = '';
+    for (let n = 0; n < words.length; n++) {
+      const testLine = line + words[n] + ' ';
+      if (ctx.measureText(testLine).width > maxWidth && n > 0) {
+        ctx.fillText(line.trim(), SHARE_W / 2, currentY);
+        line = words[n] + ' ';
+        currentY += lineHeight;
+      } else {
+        line = testLine;
+      }
+    }
+    ctx.fillText(line.trim(), SHARE_W / 2, currentY);
+    currentY += lineHeight + gapBetweenVerses; 
+  });
+
+  // Bottom: Footer
+  drawFooter(ctx);
+  return canvas.toDataURL('image/png');
+}
+
+function openShareOverlay(dataURL, title) {
+  const overlay = document.getElementById('shareOverlay');
+  const img = document.getElementById('shareImg');
+  img.src = dataURL;
+  img.dataset.url = dataURL;
+  overlay.classList.add('on');
+  navPush('shareOverlay');
+}
+
+function closeShareOverlay() {
+  const overlay = document.getElementById('shareOverlay');
+  overlay.classList.remove('on');
+  navInternalRemove('shareOverlay');
+}
+
+let currentLpBookIdx = -1;
+
+function openBookLpOverlay(bookIdx) {
+  const d = BOOKS_DATA[bookIdx];
+  if (!d || d._isCategory) return;
+  currentLpBookIdx = bookIdx;
+  const overlay = document.getElementById('bookLpOverlay');
+  const card = document.getElementById('bookLpCard');
+  card.style.background = d.art;
+  card.style.color = d.ink;
+  card.textContent = d.t;
+  overlay.classList.add('on');
+  navPush('bookLpOverlay');
+}
+
+function closeBookLpOverlay() {
+  const overlay = document.getElementById('bookLpOverlay');
+  overlay.classList.remove('on');
+  navInternalRemove('bookLpOverlay');
+  currentLpBookIdx = -1;
+}
+
+function addBookShortcut() {
+  if (currentLpBookIdx < 0) return;
+  const d = BOOKS_DATA[currentLpBookIdx];
+  const bookName = encodeURIComponent(d.t);
+  history.replaceState(null, '', `#book=${bookName}`);
+  
+  if (deferredPrompt) {
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.then(() => { deferredPrompt = null; });
+    showToast('Add to Home Screen to open this book directly');
+  } else {
+    showToast('Use your browser menu to "Add to Home Screen"');
+  }
+  closeBookLpOverlay();
+}
+
+function triggerVerseShare(block) {
+  if (navigator.vibrate) navigator.vibrate(50);
+  let bookName = '', chapterName = '', versesText = [];
+  
+  if (block.classList.contains('verse-block')) {
+    const selectedBlocks = rVerses.querySelectorAll('.verse-block.selected-verse');
+    const blocksToShare = selectedBlocks.length > 0 ? selectedBlocks : [block];
+    
+    if (blocksToShare.length > 3) {
+      showToast('Please select up to 3 verses to share');
+      return;
+    }
+    
+    const d = BOOKS_DATA[focused];
+    const c = d.ch[B[focused].cur];
+    bookName = d.t;
+    chapterName = `Chapter ${c.n}`;
+    
+    blocksToShare.forEach(b => {
+      const vi = parseInt(b.dataset.v);
+      versesText.push(`${vi + 1}. ${c.v[vi]}`);
+    });
+  } else if (block.classList.contains('saved-item')) {
+    const id = block.dataset.id;
+    const item = savedScriptures.find(s => s.id === id);
+    if (!item) return;
+    bookName = item.verses[0]?.bookName || 'Saved Notes';
+    chapterName = item.category || 'Notes';
+    if (item.description) versesText.push(item.description);
+    item.verses.forEach(v => {
+      versesText.push(`${v.bookName} ${v.chapterNum}:${v.verseNum} - "${v.text}"`);
+    });
+  }
+  const dataURL = generateVerseShareImage(bookName, chapterName, versesText);
+  openShareOverlay(dataURL, 'Share Scripture');
+}
+
+// Event listeners for overlays
+document.querySelector('#shareOverlay .share-backdrop').addEventListener('click', closeShareOverlay);
+document.querySelector('#shareOverlay .share-close-btn').addEventListener('click', closeShareOverlay);
+document.getElementById('shareSaveBtn').addEventListener('click', () => {
+  const img = document.getElementById('shareImg');
+  const link = document.createElement('a');
+  link.download = 'lume-share.png';
+  link.href = img.src;
+  link.click();
+  showToast('Image saved');
+});
+document.getElementById('shareNativeBtn').addEventListener('click', async () => {
+  const img = document.getElementById('shareImg');
+  try {
+    const res = await fetch(img.src);
+    const blob = await res.blob();
+    const file = new File([blob], 'lume-share.png', { type: 'image/png' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({
+        files: [file],
+        title: 'LUME',
+        text: 'LUME'
+      });
+    } else {
+      document.getElementById('shareSaveBtn').click();
+      showToast('Native share not supported, image saved');
+    }
+  } catch (err) {
+    console.error(err);
+    showToast('Share cancelled or failed');
+  }
+});
+
+document.querySelector('#bookLpOverlay .share-backdrop').addEventListener('click', closeBookLpOverlay);
+document.querySelector('#bookLpOverlay .share-close-btn').addEventListener('click', closeBookLpOverlay);
+document.getElementById('bookLpCloseBtn').addEventListener('click', closeBookLpOverlay);
+document.getElementById('bookLpShortcutBtn').addEventListener('click', addBookShortcut);
+/* ── End Share Image Generation ── */
+
 function makeBook(d,i){
 const el=document.createElement('article');
 const isFav = !d._isCategory && favs.has(i);
@@ -1435,9 +1801,23 @@ world.appendChild(el);
 const b={el,i,pos:i,lp:i,vis:1,tilt:0,cur:0,hover:0,hoverT:0,act:0,press:0,pressT:0,dot:null,gonePrev:false,wasActive:false,tOn:false,prevOn:false};
 resetCardCache(b);
 el.addEventListener('pointerenter',()=>{ if(b.pos>=0&&!isTouchDevice) b.hoverT=1; });
-el.addEventListener('pointerleave',()=>{ b.hoverT=0; });
-el.addEventListener('pointerdown',()=>{ b.pressT=1; });
-el.addEventListener('pointerup',()=>{ b.pressT=0; });
+el.addEventListener('pointerleave',()=>{ b.hoverT=0; clearTimeout(el._lpTimer); });
+
+// Long press for book shortcut
+el.addEventListener('pointerdown', (e) => {
+  if (e.pointerType === 'mouse' && e.button !== 0) return;
+  b.pressT = 1;
+  clearTimeout(el._lpTimer);
+  el._lpTimer = setTimeout(() => {
+    if (!moved) {
+      el._isLongPress = true;
+      openBookLpOverlay(b.i);
+    }
+  }, 600);
+});
+el.addEventListener('pointerup', () => { b.pressT = 0; clearTimeout(el._lpTimer); });
+el.addEventListener('pointercancel', () => { clearTimeout(el._lpTimer); });
+
 const favStar = el.querySelector('.book-fav-star');
 if (favStar) {
 favStar.addEventListener('pointerdown', (e) => { e.stopPropagation(); }, {passive: true});
@@ -1445,6 +1825,7 @@ favStar.addEventListener('pointerup', (e) => { e.stopPropagation(); }, {passive:
 favStar.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); toggleFavorite(parseInt(favStar.dataset.book,10)); });
 }
 el.addEventListener('click',e=>{
+if (el._isLongPress) { el._isLongPress = false; return; }
 if (e.target.closest('.book-fav-star')) return;
 if(stageAnimating||moved||b.pos<0) return;
 if (savedMode && d._isCategory) { openCategorySaved(d._catId); }
@@ -1694,10 +2075,35 @@ if (cmpChap && cmpChap.v[vi] !== undefined) currentSaveVerses.push({ bookName: d
 });
 currentSaveCategory = 'notes'; rSave.classList.add('saving'); setTimeout(() => openSaveModal(''), 240);
 });
+
+// Long press for verses / saved items
+rVerses.addEventListener('pointerdown', (e) => {
+  const block = e.target.closest('.verse-block, .saved-item');
+  if (!block) return;
+  clearTimeout(block._lpTimer);
+  block._lpTimer = setTimeout(() => {
+    rVerses._isLongPress = true;
+    triggerVerseShare(block);
+  }, 600);
+});
+rVerses.addEventListener('pointerup', (e) => {
+  const block = e.target.closest('.verse-block, .saved-item');
+  if (block) clearTimeout(block._lpTimer);
+});
+rVerses.addEventListener('pointerleave', (e) => {
+  const block = e.target.closest('.verse-block, .saved-item');
+  if (block) clearTimeout(block._lpTimer);
+});
+rVerses.addEventListener('pointercancel', (e) => {
+  const block = e.target.closest('.verse-block, .saved-item');
+  if (block) clearTimeout(block._lpTimer);
+});
+
 rVerses.addEventListener('click', e => {
-if (savedMode) return;
-const block = e.target.closest('.verse-block'); if (!block || e.target.closest('.si-menu') || e.target.closest('.si-dropdown')) return;
-block.classList.toggle('selected-verse'); updateVerseHighlightUI();
+  if (rVerses._isLongPress) { rVerses._isLongPress = false; return; }
+  if (savedMode) return;
+  const block = e.target.closest('.verse-block'); if (!block || e.target.closest('.si-menu') || e.target.closest('.si-dropdown')) return;
+  block.classList.toggle('selected-verse'); updateVerseHighlightUI();
 });
 function updateVerseHighlightUI() {
 const allBlocks = rVerses.querySelectorAll('.verse-block'); const selected = rVerses.querySelectorAll('.verse-block.selected-verse');
@@ -1707,9 +2113,8 @@ else { allBlocks.forEach(b => b.classList.remove('dimmed')); rSave.classList.rem
 function setInfo(i,force){
 if(i===lastInfo&&!force) return; lastInfo=i;
 const d=BOOKS_DATA[i]; if(!d) return;
-if (d._isCategory) { infoT.textContent=d.t; const count = savedScriptures.filter(s => s.category === d._catId).length; infoD.textContent=`${count} ${getUIText('selected_verses').toLowerCase()}`; infoM.innerHTML=`${getUIText('category')}<span class="cat">Click to view</span>`; return; }
+if (d._isCategory) { infoT.textContent=d.t; const count = savedScriptures.filter(s => s.category === d._catId).length; infoD.textContent=`${count} ${getUIText('selected_verses').toLowerCase()}`; infoM.innerHTML=`${getUIText('category')}<span class="cat">Tap to view</span>`; return; }
 const cat=getCategory(i); infoT.textContent=d.t; infoD.textContent=d.desc||(d.ch[0].v[0]||'').slice(0,110); const chapWord = d.ch.length === 1 ? getUIText('chapters').toLowerCase() : getUIText('chapters').toLowerCase() + 's'; infoM.innerHTML=`${d.test} · ${d.ch.length} ${chapWord}`+(favs.has(i)?' · <span class="fv">★</span>':'')+`<span class="cat">${cat}</span>`;
-    
 }
 cmpBtn.addEventListener('click', (e) => { e.stopPropagation(); sres.classList.remove('on'); settingsMenu.classList.remove('on'); const btnRect = cmpBtn.getBoundingClientRect(); const menuWidth = Math.min(320, window.innerWidth * 0.85); let x = btnRect.left + btnRect.width / 2; x = Math.max(menuWidth/2 + 8, Math.min(window.innerWidth - menuWidth/2 - 8, x)); document.documentElement.style.setProperty('--cmp-x', x + 'px'); document.documentElement.style.setProperty('--cmp-y', (btnRect.bottom + 8) + 'px'); cmpMenu.classList.toggle('on'); if(cmpMenu.classList.contains('on')){ cmpSearch.value = ''; renderCmpList(); setTimeout(()=>cmpSearch.focus(), 50); } });
 cmpClear.addEventListener('click', (e) => { e.stopPropagation(); activeCompareVersion = null; compareCache = {}; cmpLabel.textContent = getUIText('compare'); cmpClear.style.display = 'none'; cmpLoading.style.display = 'none'; cmpBtn.classList.remove('on'); if (focused >= 0) renderReader(focused); });
@@ -1755,14 +2160,14 @@ infoLeft = Math.min(vw-360, baseCX + BW*SS*.62 + 20); info.style.left=infoLeft+'
 B.forEach(resetCardCache); if(ghostEl) delete ghostEl.dataset.h;
 }
 addEventListener('resize',resize);
-addEventListener('wheel',e=>{ if(stageAnimating) return; if(e.target.closest('#reader,#sres,#top,#settingsMenu,#mmenu,#cmpMenu,#chapModal,.save-modal,.confirm-modal')) return; e.preventDefault(); const d=e.deltaMode===1?e.deltaY*16:e.deltaY; scrollT=clampScroll(scrollT+d); vel+=d*.02; if(vel>VMAX)vel=VMAX; if(vel<-VMAX)vel=-VMAX; lastInput=performance.now(); hint.classList.add('gone'); },{passive:false});
+addEventListener('wheel',e=>{ if(stageAnimating) return; if(e.target.closest('#reader,#sres,#top,#settingsMenu,#mmenu,#cmpMenu,#chapModal,.save-modal,.confirm-modal,#shareOverlay,#bookLpOverlay')) return; e.preventDefault(); const d=e.deltaMode===1?e.deltaY*16:e.deltaY; scrollT=clampScroll(scrollT+d); vel+=d*.02; if(vel>VMAX)vel=VMAX; if(vel<-VMAX)vel=-VMAX; lastInput=performance.now(); hint.classList.add('gone'); },{passive:false});
 function forceEndDrag(){ dragging=false; activePointer=-1; document.body.classList.remove('dragging'); B.forEach(b=>{ b.pressT=0; }); vel=0; }
 addEventListener('blur', forceEndDrag); document.addEventListener('visibilitychange', ()=>{ if(document.hidden) forceEndDrag(); });
 addEventListener('pointerdown',e=>{
 if(stageAnimating) return;
 if(activePointer!==-1){ if(performance.now() - lastPointerActivity > 800){ forceEndDrag(); } else return; }
 moved=false;
-if(e.target.closest('#reader,#sres,#top,#settingsMenu,#mmenu,#cmpMenu,#dots,#chapModal,.save-modal,.confirm-modal')) return;
+if(e.target.closest('#reader,#sres,#top,#settingsMenu,#mmenu,#cmpMenu,#dots,#chapModal,.save-modal,.confirm-modal,#shareOverlay,#bookLpOverlay')) return;
 if(focused!==-1) return;
 activePointer=e.pointerId; dragging=true; vel=0; lastY=e.clientY; lastT=performance.now(); lastPointerActivity=lastT; startX=e.clientX; startY=e.clientY; dragStartT=lastT; dragStartScroll=scrollT;
 B.forEach(b=>b.hoverT=0); document.body.classList.add('dragging');
@@ -1771,14 +2176,17 @@ addEventListener('pointermove',e=>{
 if(!dragging||e.pointerId!==activePointer) return;
 const dy=e.clientY-lastY, now=performance.now(), dt=Math.max(8,now-lastT); lastPointerActivity=now;
 const tdx=e.clientX-startX, tdy=e.clientY-startY;
-if(!moved && (Math.abs(tdx)>10 || Math.abs(tdy)>10)) moved=true;
+if(!moved && (Math.abs(tdx)>10 || Math.abs(tdy)>10)) {
+  moved=true;
+  B.forEach(book => clearTimeout(book.el._lpTimer));
+}
 const horizDominant = Math.abs(tdx) > Math.abs(tdy) * 1.25 && Math.abs(tdx) > 20;
 if(!horizDominant){ scrollT=clampScroll(scrollT - dy); const rawVel = -dy / dt; vel = narrow ? (0.5 * vel + 0.5 * rawVel) : (0.75 * vel + 0.25 * rawVel); if(vel>VMAX)vel=VMAX; if(vel<-VMAX)vel=-VMAX; }
 lastY=e.clientY; lastT=now; lastInput=now; if(moved) hint.classList.add('gone');
 },{passive:true});
 function endPointer(e){
 if(!dragging||e.pointerId!==activePointer) return;
-dragging=false; activePointer=-1; document.body.classList.remove('dragging'); B.forEach(b=>b.pressT=0);
+dragging=false; activePointer=-1; document.body.classList.remove('dragging'); B.forEach(b=>{ b.pressT=0; });
 if(!moved) vel=0; lastInput=performance.now();
 const dx = e.clientX - startX, dy = e.clientY - startY; const dur = performance.now() - dragStartT; const scDelta = Math.abs(scrollT - dragStartScroll);
 if(!stageAnimating && focused===-1 && !savedReaderOpen && Math.abs(dx) > 84 && Math.abs(dx) > Math.abs(dy) * 2.1 && Math.abs(dy) < 70 && dur < 650 && scDelta < SP * 0.6){
